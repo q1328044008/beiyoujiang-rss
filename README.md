@@ -64,6 +64,7 @@ python generate_feed.py --out docs/feed.xml                # 输出到 docs 目�
 - `--pages`：每个板块抓几页，默认 2
 - `--page-size`：每页条数，默认 20
 - `--limit`：最终保留条数，默认 40
+- `--per-plate`：每个板块各留多少条。填了会忽略 `--limit`，冷门板块不会被热门板块挤掉。线上跑的是 `--plates 1,2,3 --per-plate 15`，共 45 条，三块各 15 条
 - `--out`：输出路径，默认 `feed.xml`
 - `--text-out`：顺便再输出一份纯文本 feed，比如 `--text-out docs/feed-text.xml`
 - `--format`：`html`（默认）或 `text`，单独生成纯文本版时用
