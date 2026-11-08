@@ -370,10 +370,13 @@ def build_text_body(post: dict, detail: dict, comments: list[dict], with_comment
     return "\n".join(lines).strip()
 
 
-def collect_posts(client: Client, plates: list[int], pages: int, page_size: int, limit: int) -> list[dict]:
+def collect_posts(client: Client, plates: list[int], pages: int, page_size: int, limit: int,
+                  per_plate: int = 0) -> list[dict]:
+    """按板块抓列表。per_plate > 0 时每个板块各留这么多条，保证冷门板块不被热门板块挤掉。"""
     seen: set[int] = set()
     items: list[dict] = []
     for plate in plates:
+        taken = 0
         for page in range(1, pages + 1):
             posts = fetch_page(client, plate, page, page_size)
             if not posts:
@@ -386,11 +389,14 @@ def collect_posts(client: Client, plates: list[int], pages: int, page_size: int,
                     continue
                 seen.add(pid)
                 items.append(post)
-            if len(posts) < page_size:
+                taken += 1
+                if per_plate and taken >= per_plate:
+                    break
+            if (per_plate and taken >= per_plate) or len(posts) < page_size:
                 break
             time.sleep(1)
     items.sort(key=lambda p: parse_time(p.get("createdAt")), reverse=True)
-    return items[:limit]
+    return items if per_plate else items[:limit]
 
 
 def enrich(client: Client, posts: list[dict], with_comments: bool) -> list[tuple[dict, dict, list[dict]]]:
@@ -470,6 +476,8 @@ def main() -> int:
     parser.add_argument("--pages", type=int, default=2, help="每个板块抓几页（默认 2）")
     parser.add_argument("--page-size", type=int, default=20, help="每页条数（默认 20）")
     parser.add_argument("--limit", type=int, default=40, help="最终保留多少条（默认 40）")
+    parser.add_argument("--per-plate", type=int, default=0,
+                        help="每个板块各留多少条（填了就忽略 --limit，冷门板块不会被挤掉）")
     parser.add_argument("--out", default="feed.xml", help="输出文件路径（默认 feed.xml）")
     parser.add_argument("--format", default="html", choices=["html", "text"],
                         help="html=富文本（默认）；text=纯文本，适合不渲染 HTML 的阅读器")
@@ -489,8 +497,9 @@ def main() -> int:
     if with_detail or with_comments:
         client.ensure_guest()
 
-    print(f"[info] 抓取板块: {', '.join(plate_name(p) for p in plates)}")
-    posts = collect_posts(client, plates, args.pages, args.page_size, args.limit)
+    print(f"[info] 抓取板块: {', '.join(plate_name(p) for p in plates)}"
+          + (f"（每板块 {args.per_plate} 条）" if args.per_plate else ""))
+    posts = collect_posts(client, plates, args.pages, args.page_size, args.limit, args.per_plate)
     if not posts:
         print("[error] 没抓到任何帖子，接口可能改过了。", file=sys.stderr)
         return 1
