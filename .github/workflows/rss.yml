@@ -30,26 +30,29 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: 生成 docs/feed.xml
+      - name: 生成 feed（富文本 + 纯文本两版）
         run: |
           python generate_feed.py \
             --out docs/feed.xml \
+            --text-out docs/feed-text.xml \
             --pages 2 \
             --page-size 20 \
             --limit 40 \
             --feed-url "https://q1328044008.github.io/beiyoujiang-rss/feed.xml"
 
       - name: 校验 XML 合法性
-        run: python -c "import xml.etree.ElementTree as ET; ET.parse('docs/feed.xml'); print('XML OK')"
+        run: |
+          python -c "import xml.etree.ElementTree as ET; ET.parse('docs/feed.xml'); print('feed.xml OK')"
+          python -c "import xml.etree.ElementTree as ET; ET.parse('docs/feed-text.xml'); print('feed-text.xml OK')"
 
       - name: 内容有变化才提交
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if git diff --quiet -- docs/feed.xml; then
+          if git diff --quiet -- docs/feed.xml docs/feed-text.xml; then
             echo "内容无变化，跳过提交"
           else
-            git add docs/feed.xml
-            git commit -m "chore: 更新 feed.xml $(date -u '+%Y-%m-%d %H:%M UTC')"
+            git add docs/feed.xml docs/feed-text.xml
+            git commit -m "chore: 更新 feed $(date -u '+%Y-%m-%d %H:%M UTC')"
             git push
           fi
