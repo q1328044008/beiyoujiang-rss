@@ -2,19 +2,15 @@
 
 给 [杯友酱论坛](https://beiyoujiang.com/) 做的 RSS 订阅源。
 
-- **富文本版**（推荐给浏览器/网页阅读器）：https://q1328044008.github.io/beiyoujiang-rss/feed.xml
-- **纯文本版**（推荐给「阅读」/ Legado 这类 App）：https://q1328044008.github.io/beiyoujiang-rss/feed-text.xml
-- **阅读 App 订阅源文件**（直接导入）：https://q1328044008.github.io/beiyoujiang-rss/beiyoujiang-legado.json
+- **富文本版**（浏览器 / 网页阅读器）：https://q1328044008.github.io/beiyoujiang-rss/feed.xml
+- **纯文本版**（「阅读」/ Legado 这类 App 用这条）：https://q1328044008.github.io/beiyoujiang-rss/feed-text.xml
 
 两版内容一样：正文全文 + 配图 + 楼中楼评论，区别只在正文是 HTML 还是纯文本。
 
 ## 在「阅读」(Legado) 里用
 
-1. 打开 App → 订阅 / 订阅源 → 右上角菜单 → 导入源（或「从链接/文件导入」）
-2. 选上面那个 `beiyoujiang-legado.json`，或者直接粘贴它的内容
-3. 导入后即可看到「杯友酱论坛」这个源，点进任意一条就是正文 + 评论
-
-如果 App 导入 JSON 不认，就手动新建一个标准 RSS 订阅源，地址填 `feed-text.xml` 那条。
+新建一个 RSS 订阅，地址粘贴 `feed-text.xml` 那条即可。不需要 js 源，也不需要登录账号。
+纯文本版保证正文和评论是纯文字，App 里不渲染 HTML 也能看全。
 
 ## 这是怎么做的
 
@@ -45,7 +41,6 @@ POST /api/comment/getPostComment {"postId":13609,"userId":<游客id>,"reply":nul
 | `.github/workflows/rss.yml` | 每 30 分钟跑一次，同时更新 `docs/feed.xml` 与 `docs/feed-text.xml` 并提交 |
 | `docs/feed.xml` | 富文本订阅文件，Pages 发布的就是它 |
 | `docs/feed-text.xml` | 纯文本订阅文件，给不渲染 HTML 的阅读器 |
-| `docs/beiyoujiang-legado.json` | 阅读App / Legado 可直接导入的订阅源配置 |
 | `docs/index.html` | 一页说明，打开站点首页能看到订阅地址 |
 
 ## 发布方式
