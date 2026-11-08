@@ -13,15 +13,13 @@ on:
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
 
 concurrency:
   group: beiyoujiang-rss
   cancel-in-progress: false
 
 jobs:
-  build:
+  update:
     runs-on: ubuntu-latest
     steps:
       - name: 检出仓库
@@ -32,50 +30,26 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: 读取 Pages 地址
-        id: pages
-        uses: actions/configure-pages@v5
-
-      - name: 生成 feed.xml
+      - name: 生成 docs/feed.xml
         run: |
           python generate_feed.py \
             --out docs/feed.xml \
             --pages 2 \
             --page-size 20 \
             --limit 40 \
-            --feed-url "${{ steps.pages.outputs.base_url }}/feed.xml"
+            --feed-url "https://q1328044008.github.io/beiyoujiang-rss/feed.xml"
 
       - name: 校验 XML 合法性
         run: python -c "import xml.etree.ElementTree as ET; ET.parse('docs/feed.xml'); print('XML OK')"
 
-      - name: 提交最新 feed（仅内容有变化时）
+      - name: 内容有变化才提交
         run: |
-          cp docs/feed.xml feed.xml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if git diff --quiet -- feed.xml; then
+          if git diff --quiet -- docs/feed.xml; then
             echo "内容无变化，跳过提交"
           else
-            git add feed.xml
+            git add docs/feed.xml
             git commit -m "chore: 更新 feed.xml $(date -u '+%Y-%m-%d %H:%M UTC')"
             git push
           fi
-
-      - name: 关闭 Jekyll 处理
-        run: touch docs/.nojekyll
-
-      - name: 打包 Pages 产物
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: docs
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: 部署到 GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
