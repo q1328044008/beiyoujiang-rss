@@ -35,9 +35,10 @@ jobs:
           python generate_feed.py \
             --out docs/feed.xml \
             --text-out docs/feed-text.xml \
+            --plates 1,2,3 \
+            --per-plate 15 \
             --pages 2 \
             --page-size 20 \
-            --limit 40 \
             --feed-url "https://q1328044008.github.io/beiyoujiang-rss/feed.xml"
 
       - name: 校验 XML 合法性
