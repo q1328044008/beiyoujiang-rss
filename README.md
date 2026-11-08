@@ -27,10 +27,14 @@ Content-Type: application/json
 | 文件 | 作用 |
 | --- | --- |
 | `generate_feed.py` | 抓取并生成 RSS，纯标准库，无需 pip install |
-| `.github/workflows/rss.yml` | 每 30 分钟跑一次，更新 feed 并部署到 Pages |
-| `docs/feed.xml` | 生成的订阅文件（Pages 发布的就这一个） |
-| `docs/index.html` | 一页说明，打开主页就能看到订阅地址 |
-| `feed.xml` | 仓库根目录的同一份副本，方便用 raw 地址订阅 |
+| `.github/workflows/rss.yml` | 每 30 分钟跑一次，更新 `docs/feed.xml` 并提交 |
+| `docs/feed.xml` | 订阅文件本体，Pages 发布的就是它 |
+| `docs/index.html` | 一页说明，打开站点首页能看到订阅地址 |
+
+## 发布方式
+
+GitHub Pages 走「Deploy from a branch」：分支 `main`、目录 `/docs`。
+每次 `docs/feed.xml` 有更新就被工作流提交，Pages 自动重新发布，不依赖 Actions 部署权限。
 
 ## 本地跑
 
@@ -49,16 +53,10 @@ python generate_feed.py --out docs/feed.xml                # 输出到 docs 目�
 - `--out`：输出路径，默认 `feed.xml`
 - `--feed-url`：填了会写进 `<atom:link rel="self">`，方便阅读器识别
 
-## 首次部署清单
-
-1. 仓库 Settings → Pages → Source 选 **GitHub Actions**（这一步不做，workflow 的 deploy 会失败）
-2. Actions 页面点一次 **更新 RSS 订阅源** → Run workflow，手动跑第一次
-3. 等绿灯后访问 `https://q1328044008.github.io/beiyoujiang-rss/feed.xml`
-
-## 可能的坑
+## 可能遇到的坑
 
 - GitHub 的定时任务不保证准点，免费额度下延迟几分钟到十几分钟都正常。
-- 抓取只读公开列表接口，不登录、不发帖、不点赞；每次请求间隔 1 秒，两个板块两页也就十来个请求。
+- 抓取只读公开列表接口，不登录、不发帖、不点赞；每次请求间隔 1 秒，三个板块两页也就十来个请求。
 - 如果哪天接口改了字段或加了风控，`generate_feed.py` 是唯一需要改的地方，改 `fetch_page()` 里的 payload 即可。
 - 抓到的图片是站内相对路径转成的绝对地址，阅读器支持外链图片才会显示。
 - 内容为 18+ 成人玩具社区帖子摘要，只适合成年读者自用。
