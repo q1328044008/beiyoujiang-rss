@@ -1,0 +1,14 @@
+ocs/beiyoujiang-legado.json{
+  "sourceName": "杯友酱论坛",
+  "sourceUrl": "https://q1328044008.github.io/beiyoujiang-rss/feed-text.xml",
+  "sourceGroup": "论坛",
+  "enabled": true,
+  "enableJs": false,
+  "singleUrl": true,
+  "loadWithBaseUrl": false,
+  "enabledCookieJar": false,
+  "articleStyle": 0,
+  "customOrder": 0,
+  "header": "",
+  "variableComment": "每 30 分钟自动更新，正文与评论为纯文本，任何阅读器都能显示。"
+}
