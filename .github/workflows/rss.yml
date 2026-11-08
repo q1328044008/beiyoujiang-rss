@@ -52,8 +52,19 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           if git diff --quiet -- docs/feed.xml docs/feed-text.xml; then
             echo "内容无变化，跳过提交"
-          else
-            git add docs/feed.xml docs/feed-text.xml
-            git commit -m "chore: 更新 feed $(date -u '+%Y-%m-%d %H:%M UTC')"
-            git push
+            exit 0
           fi
+          git add docs/feed.xml docs/feed-text.xml
+          git commit -m "chore: 更新 feed $(date -u '+%Y-%m-%d %H:%M UTC')"
+          # 期间可能有人工提交，先 rebase 再推，最多试三次
+          for i in 1 2 3; do
+            git pull --rebase --autostash origin "${GITHUB_REF_NAME}" || true
+            if git push origin "HEAD:${GITHUB_REF_NAME}"; then
+              echo "推送成功"
+              exit 0
+            fi
+            echo "第 $i 次推送失败，5 秒后重试"
+            sleep 5
+          done
+          echo "推送三次都失败，请人工检查"
+          exit 1
