@@ -2,7 +2,19 @@
 
 给 [杯友酱论坛](https://beiyoujiang.com/) 做的 RSS 订阅源。
 
-**订阅地址**：https://q1328044008.github.io/beiyoujiang-rss/feed.xml
+- **富文本版**（推荐给浏览器/网页阅读器）：https://q1328044008.github.io/beiyoujiang-rss/feed.xml
+- **纯文本版**（推荐给「阅读」/ Legado 这类 App）：https://q1328044008.github.io/beiyoujiang-rss/feed-text.xml
+- **阅读 App 订阅源文件**（直接导入）：https://q1328044008.github.io/beiyoujiang-rss/beiyoujiang-legado.json
+
+两版内容一样：正文全文 + 配图 + 楼中楼评论，区别只在正文是 HTML 还是纯文本。
+
+## 在「阅读」(Legado) 里用
+
+1. 打开 App → 订阅 / 订阅源 → 右上角菜单 → 导入源（或「从链接/文件导入」）
+2. 选上面那个 `beiyoujiang-legado.json`，或者直接粘贴它的内容
+3. 导入后即可看到「杯友酱论坛」这个源，点进任意一条就是正文 + 评论
+
+如果 App 导入 JSON 不认，就手动新建一个标准 RSS 订阅源，地址填 `feed-text.xml` 那条。
 
 ## 这是怎么做的
 
@@ -30,8 +42,10 @@ POST /api/comment/getPostComment {"postId":13609,"userId":<游客id>,"reply":nul
 | 文件 | 作用 |
 | --- | --- |
 | `generate_feed.py` | 抓取并生成 RSS，纯标准库，无需 pip install |
-| `.github/workflows/rss.yml` | 每 30 分钟跑一次，更新 `docs/feed.xml` 并提交 |
-| `docs/feed.xml` | 订阅文件本体，Pages 发布的就是它 |
+| `.github/workflows/rss.yml` | 每 30 分钟跑一次，同时更新 `docs/feed.xml` 与 `docs/feed-text.xml` 并提交 |
+| `docs/feed.xml` | 富文本订阅文件，Pages 发布的就是它 |
+| `docs/feed-text.xml` | 纯文本订阅文件，给不渲染 HTML 的阅读器 |
+| `docs/beiyoujiang-legado.json` | 阅读App / Legado 可直接导入的订阅源配置 |
 | `docs/index.html` | 一页说明，打开站点首页能看到订阅地址 |
 
 ## 发布方式
@@ -54,6 +68,8 @@ python generate_feed.py --out docs/feed.xml                # 输出到 docs 目�
 - `--page-size`：每页条数，默认 20
 - `--limit`：最终保留条数，默认 40
 - `--out`：输出路径，默认 `feed.xml`
+- `--text-out`：顺便再输出一份纯文本 feed，比如 `--text-out docs/feed-text.xml`
+- `--format`：`html`（默认）或 `text`，单独生成纯文本版时用
 - `--feed-url`：填了会写进 `<atom:link rel="self">`，方便阅读器识别
 - `--no-comments`：不抓评论，请求量减半（40 条约 40 次请求 → 约 70 次）
 - `--no-detail`：不抓正文全文，只用列表摘要，速度最快
