@@ -31,6 +31,7 @@ import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta, timezone
 from email.utils import format_datetime
+from html import unescape
 from xml.sax.saxutils import escape
 
 BASE_URL = "https://beiyoujiang.com"
@@ -163,6 +164,26 @@ def abs_html(html: str) -> str:
     out = _SRC_REL.sub(r'\1="' + BASE_URL + "/", html)
     out = _STYLE_ATTR.sub("", out)
     return out.replace("]]>", "]]&gt;")
+
+
+_BR = re.compile(r"<br\s*/?>", re.I)
+_BLOCK_END = re.compile(r"</(?:p|div|li|h[1-6]|blockquote)>", re.I)
+_LI_OPEN = re.compile(r"<li[^>]*>", re.I)
+
+
+def html_to_text(html: str) -> str:
+    """HTML 转纯文本，保留换行——给不渲染 HTML 的阅读器用。"""
+    if not html:
+        return ""
+    text = abs_html(html)
+    text = _BR.sub("\n", text)
+    text = _BLOCK_END.sub("\n", text)
+    text = _LI_OPEN.sub("- ", text)
+    text = _HTML_TAG.sub("", text)
+    text = unescape(text).replace("\u00a0", " ")
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return "\n".join(line.strip() for line in text.split("\n")).strip()
 
 
 def parse_time(value: str | None) -> datetime:
@@ -308,6 +329,47 @@ def build_body(post: dict, detail: dict, comments: list[dict], with_comments: bo
     return "\n".join(parts)
 
 
+def build_text_body(post: dict, detail: dict, comments: list[dict], with_comments: bool) -> str:
+    """纯文本版正文：给只显示文字、不渲染 HTML 的阅读器（如阅读/Legado）用。"""
+    lines: list[str] = []
+
+    body = html_to_text(detail.get("content") or post.get("content") or "")
+    if body:
+        lines.append(body)
+
+    images = normalize_images(detail.get("imageUrls")) or normalize_images(post.get("imageUrls"))
+    for idx, name in enumerate(images[:3], 1):
+        url = IMG_URL.format(filename=urllib.parse.quote(name))
+        lines.append(f"[配图{idx}] {url}")
+
+    author = (post.get("author") or {}).get("username") or "匿名"
+    lines.append(
+        f"板块：{plate_name(post.get('plate'))} ｜ 作者：{author} ｜ "
+        f"发布 {local_time(post.get('createdAt'))} ｜ "
+        f"浏览 {post.get('readingQuantity', 0)} ｜ 回复 {post.get('commentCount', 0)} ｜ "
+        f"点赞 {post.get('likeCount', 0)}"
+    )
+
+    if with_comments and comments:
+        lines.append("")
+        lines.append(f"—— 评论（{len(comments)}） ——")
+        for comment in comments[:MAX_COMMENTS]:
+            author = (comment.get("author") or {}).get("username") or "匿名"
+            floor = comment.get("floor")
+            head = f"#{floor} " if floor else ""
+            lines.append("")
+            lines.append(f"{head}{author} {local_time(comment.get('createdAt'))}")
+            body = html_to_text(comment.get("content") or "")
+            if body:
+                lines.append(body)
+            for reply in (comment.get("replies") or [])[:4]:
+                reply_author = (reply.get("author") or {}).get("username") or "匿名"
+                reply_body = html_to_text(reply.get("content") or "")
+                lines.append(f"　└ 回复 {reply_author}：{reply_body}")
+
+    return "\n".join(lines).strip()
+
+
 def collect_posts(client: Client, plates: list[int], pages: int, page_size: int, limit: int) -> list[dict]:
     seen: set[int] = set()
     items: list[dict] = []
@@ -351,8 +413,12 @@ def enrich(client: Client, posts: list[dict], with_comments: bool) -> list[tuple
     return out
 
 
-def build_rss(items: list[tuple[dict, dict, list[dict]]], feed_url: str, with_comments: bool) -> str:
+def build_rss(items: list[tuple[dict, dict, list[dict]]], feed_url: str,
+              with_comments: bool, fmt: str = "html") -> str:
     now = datetime.now(timezone.utc).astimezone(CST)
+    plain = fmt == "text"
+    title_suffix = ""
+    desc = SITE_DESC + ("纯文本版，适合不渲染 HTML 的阅读器。" if plain else "")
     lines: list[str] = []
     add = lines.append
 
@@ -360,9 +426,9 @@ def build_rss(items: list[tuple[dict, dict, list[dict]]], feed_url: str, with_co
     add('<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" '
         'xmlns:content="http://purl.org/rss/1.0/modules/content/">')
     add("  <channel>")
-    add(f"    <title>{escape(SITE_TITLE)}</title>")
+    add(f"    <title>{escape(SITE_TITLE)}{escape(title_suffix)}</title>")
     add(f"    <link>{escape(BASE_URL)}/</link>")
-    add(f"    <description>{escape(SITE_DESC)}</description>")
+    add(f"    <description>{escape(desc)}</description>")
     add("    <language>zh-cn</language>")
     add(f"    <lastBuildDate>{format_datetime(now)}</lastBuildDate>")
     add("    <generator>beiyoujiang-rss</generator>")
@@ -376,7 +442,10 @@ def build_rss(items: list[tuple[dict, dict, list[dict]]], feed_url: str, with_co
         title = (post.get("title") or "").strip() or f"帖子 #{pid}"
         pub = parse_time(post.get("createdAt")).astimezone(CST)
         author = (post.get("author") or {}).get("username") or "匿名"
-        html = build_body(post, detail, comments, with_comments)
+        if plain:
+            body = escape(build_text_body(post, detail, comments, with_comments))
+        else:
+            body = f"<![CDATA[{build_body(post, detail, comments, with_comments)}]]>"
 
         add("    <item>")
         add(f"      <title>{escape(title)}</title>")
@@ -385,8 +454,8 @@ def build_rss(items: list[tuple[dict, dict, list[dict]]], feed_url: str, with_co
         add(f"      <pubDate>{format_datetime(pub)}</pubDate>")
         add(f"      <author>{escape(author)}</author>")
         add(f"      <category>{escape(plate_name(post.get('plate')))}</category>")
-        add(f"      <description><![CDATA[{html}]]></description>")
-        add(f"      <content:encoded><![CDATA[{html}]]></content:encoded>")
+        add(f"      <description>{body}</description>")
+        add(f"      <content:encoded>{body}</content:encoded>")
         add("    </item>")
 
     add("  </channel>")
@@ -402,7 +471,11 @@ def main() -> int:
     parser.add_argument("--page-size", type=int, default=20, help="每页条数（默认 20）")
     parser.add_argument("--limit", type=int, default=40, help="最终保留多少条（默认 40）")
     parser.add_argument("--out", default="feed.xml", help="输出文件路径（默认 feed.xml）")
+    parser.add_argument("--format", default="html", choices=["html", "text"],
+                        help="html=富文本（默认）；text=纯文本，适合不渲染 HTML 的阅读器")
     parser.add_argument("--feed-url", default="", help="填写后写入 atom:self 自引用地址")
+    parser.add_argument("--text-out", default="",
+                        help="同时再输出一份纯文本 feed（供不渲染 HTML 的阅读器使用）")
     parser.add_argument("--no-comments", action="store_true", help="不抓评论，请求量减半")
     parser.add_argument("--no-detail", action="store_true", help="不抓正文全文，只用列表摘要")
     args = parser.parse_args()
@@ -425,10 +498,18 @@ def main() -> int:
 
     items = enrich(client, posts, with_comments) if with_detail else [(p, {}, []) for p in posts]
 
-    xml = build_rss(items, args.feed_url, with_comments)
+    xml = build_rss(items, args.feed_url, with_comments, args.format)
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
     with open(args.out, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(xml)
+
+    if args.text_out:
+        text_url = args.feed_url.replace("feed.xml", "feed-text.xml") if args.feed_url else ""
+        text_xml = build_rss(items, text_url, with_comments, "text")
+        os.makedirs(os.path.dirname(os.path.abspath(args.text_out)), exist_ok=True)
+        with open(args.text_out, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(text_xml)
+        print(f"[ok] 纯文本版写入 {args.text_out}")
 
     total_comments = sum(len(c) for _, _, c in items)
     newest = parse_time(items[0][0].get("createdAt")).astimezone(CST)
