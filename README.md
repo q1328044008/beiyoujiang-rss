@@ -2,6 +2,8 @@
 
 给 [杯友酱论坛](https://beiyoujiang.com/) 做的 RSS 订阅源。
 
+抓取脚本、订阅源与说明页由 **豆包（Doubao）** 协助搭建与维护；数据来自站点公开接口。
+
 - **富文本版**（浏览器 / 网页阅读器）：https://q1328044008.github.io/beiyoujiang-rss/feed.xml
 - **纯文本版**（「阅读」/ Legado 这类 App 用这条）：https://q1328044008.github.io/beiyoujiang-rss/feed-text.xml
 
