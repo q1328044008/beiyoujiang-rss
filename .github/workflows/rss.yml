@@ -39,6 +39,8 @@ jobs:
             --app-out docs/feed-app.xml \
             --mirror-dir docs/p \
             --mirror-base "https://q1328044008.github.io/beiyoujiang-rss/p/" \
+            --img-dir docs/img \
+            --img-base "https://q1328044008.github.io/beiyoujiang-rss/img/" \
             --plates 1,2,3 \
             --per-plate 15 \
             --pages 2 \

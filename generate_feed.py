@@ -27,12 +27,18 @@
          feed-app.xml 的 link 指向镜像页，这样即使 App 坚持抓全文，
          抓到的也是真实正文与评论。
 
+关于图片：
+    beiyoujiang.com 开了防盗链——Referer 不是本站时图片一律 403，而阅读器
+    WebView 加载正文时的 Referer 正是 feed / 镜像页的地址。所以用
+    --img-dir / --img-base 把图片下载到 GitHub Pages 的同源目录再引用。
+
 只依赖 Python 标准库，方便在 GitHub Actions 里零依赖运行。
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -310,6 +316,104 @@ def image_src(name: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# 图片镜像：beiyoujiang.com 开了防盗链
+#   - 不带 Referer / Referer 是本站  → 200
+#   - Referer 是别的站（如 github.io）→ 403
+# 阅读器的 WebView 加载正文时 Referer 就是 feed/镜像页地址，所以图片会全部裂开。
+# 这里把图片下载到 GitHub Pages 同源目录再引用，彻底绕开防盗链。
+# ---------------------------------------------------------------------------
+
+IMG_DIR = ""
+IMG_BASE = ""
+_img_cache: dict[str, str] = {}
+_img_failed: set[str] = set()
+_img_downloaded = 0
+_IMG_EXT = (".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".svg")
+
+
+def _guess_ext(url: str, content_type: str) -> str:
+    path = urllib.parse.urlparse(url).path.lower()
+    for ext in _IMG_EXT:
+        if path.endswith(ext):
+            return ext
+    mapping = {
+        "image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp",
+        "image/gif": ".gif", "image/svg+xml": ".svg", "image/bmp": ".bmp",
+    }
+    return mapping.get((content_type or "").split(";")[0].strip().lower(), ".jpg")
+
+
+def mirror_image(url: str) -> str:
+    """把图片下载到 IMG_DIR，返回 Pages 上的地址；失败则原样返回。"""
+    global _img_downloaded
+    if not IMG_DIR or not IMG_BASE:
+        return url
+    raw = unescape(url)
+    if raw in _img_cache:
+        return escape(_img_cache[raw])
+    if raw in _img_failed:
+        return url
+
+    name = hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
+    # 名称按 URL 定，已存在就跳过，避免每次全量重下
+    for ext in _IMG_EXT:
+        candidate = os.path.join(IMG_DIR, name + ext)
+        if os.path.exists(candidate) and os.path.getsize(candidate) > 0:
+            _img_cache[raw] = IMG_BASE + name + ext
+            return escape(_img_cache[raw])
+
+    request = urllib.request.Request(raw, headers={
+        "User-Agent": UA,
+        "Referer": BASE_URL + "/",
+        "Accept": "image/avif,image/webp,image/*,*/*;q=0.8",
+    })
+    for attempt in range(1, 3):
+        try:
+            with urllib.request.urlopen(request, timeout=30) as resp:
+                data = resp.read()
+                ext = _guess_ext(raw, resp.headers.get("Content-Type", ""))
+            if not data:
+                raise ValueError("空响应")
+            os.makedirs(IMG_DIR, exist_ok=True)
+            with open(os.path.join(IMG_DIR, name + ext), "wb") as fh:
+                fh.write(data)
+            _img_downloaded += 1
+            _img_cache[raw] = IMG_BASE + name + ext
+            return escape(_img_cache[raw])
+        except Exception as exc:  # noqa: BLE001 - 失败就退回原图地址
+            if attempt == 2:
+                print(f"[warn] 图片镜像失败 {raw}: {exc}", file=sys.stderr)
+    _img_failed.add(raw)
+    return url
+
+
+_IMG_TAG = re.compile(r'(<img\b[^>]*?\bsrc=")([^"]+)(")', re.I)
+
+
+def rewrite_images(block: str) -> str:
+    if not IMG_DIR:
+        return block
+    return _IMG_TAG.sub(lambda m: m.group(1) + mirror_image(m.group(2)) + m.group(3), block)
+
+
+def cleanup_images() -> int:
+    """删掉本次没有被引用的旧图片，避免仓库无限膨胀。"""
+    if not IMG_DIR or not os.path.isdir(IMG_DIR):
+        return 0
+    keep = {os.path.basename(url) for url in _img_cache.values()}
+    removed = 0
+    for name in os.listdir(IMG_DIR):
+        if name in keep:
+            continue
+        try:
+            os.remove(os.path.join(IMG_DIR, name))
+            removed += 1
+        except OSError:
+            pass
+    return removed
+
+
+# ---------------------------------------------------------------------------
 # 抓取
 # ---------------------------------------------------------------------------
 
@@ -461,6 +565,8 @@ def build_blocks(post: dict, detail: dict, comments: list[dict], with_comments: 
         '<footer><p><small>本条由杯友酱 RSS 自动抓取，完整讨论请到 '
         f'<a href="{escape(original_url)}">原帖</a>。</small></p></footer>'
     )
+    if IMG_DIR:
+        blocks = [rewrite_images(block) for block in blocks]
     return blocks
 
 
@@ -636,6 +742,10 @@ def main() -> int:
                         help="静态镜像页输出目录（配合 --app-out 使用，如 docs/p）")
     parser.add_argument("--mirror-base", default="",
                         help="镜像页的公开访问前缀，如 https://user.github.io/repo/p/")
+    parser.add_argument("--img-dir", default="",
+                        help="把帖子图片镜像到这个本地目录（绕开原站防盗链），如 docs/img")
+    parser.add_argument("--img-base", default="",
+                        help="镜像图片的公开访问前缀，如 https://user.github.io/repo/img/")
     parser.add_argument("--no-comments", action="store_true", help="不抓评论，请求量减半")
     parser.add_argument("--no-detail", action="store_true", help="不抓正文全文，只用列表摘要")
     args = parser.parse_args()
@@ -647,6 +757,15 @@ def main() -> int:
         parser.error("--app-out 需要同时指定 --mirror-dir")
     if args.app_out and not args.mirror_base:
         parser.error("--app-out 需要同时指定 --mirror-base")
+    if bool(args.img_dir) != bool(args.img_base):
+        parser.error("--img-dir 与 --img-base 需要成对出现")
+
+    global IMG_DIR, IMG_BASE
+    IMG_DIR = args.img_dir
+    IMG_BASE = args.img_base if args.img_base.endswith("/") or not args.img_base else args.img_base + "/"
+    if IMG_DIR:
+        os.makedirs(IMG_DIR, exist_ok=True)
+        print(f"[info] 图片镜像到 {IMG_DIR} → {IMG_BASE}")
 
     client = Client()
     with_comments = not args.no_comments
@@ -691,6 +810,10 @@ def main() -> int:
     newest = parse_time(items[0][0].get("createdAt")).astimezone(CST)
     print(f"[ok] 写入 {args.out}：{len(items)} 条、{total_comments} 条评论，"
           f"最新一条 {newest:%Y-%m-%d %H:%M}（CST）")
+    if IMG_DIR:
+        removed = cleanup_images()
+        print(f"[ok] 图片镜像：引用 {len(_img_cache)} 张，本次新下载 {_img_downloaded} 张，"
+              f"清理旧图 {removed} 个，失败 {len(_img_failed)} 个")
     return 0
 
 

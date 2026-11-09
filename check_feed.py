@@ -99,6 +99,7 @@ def main(argv: list[str]) -> int:
         thin: list[tuple[str, dict]] = []
         total, min_blocks, min_chars = 0, 999, 10**9
         relative_links = 0
+        hotlinked = 0
         missing_mirrors = 0
         empty_items = 0
         plain_text_feed = True
@@ -113,6 +114,8 @@ def main(argv: list[str]) -> int:
                 plain_text_feed = False
             if re.search(r'(?:src|href)="/(?!/)', body):
                 relative_links += 1
+            if re.search(r'<img[^>]+src="https?://(?:www\.)?beiyoujiang\.com', body):
+                hotlinked += 1
             info = analyse(body)
             min_blocks = min(min_blocks, info["blocks"])
             min_chars = min(min_chars, info["chars"])
@@ -127,17 +130,21 @@ def main(argv: list[str]) -> int:
         print(f"\n== {path} ==")
         if plain_text_feed:
             print(f"items={total}  纯文本版（无 HTML 标签，不参与结构检查）  "
-                  f"相对链接={relative_links}  缺镜像页={missing_mirrors}  空正文={empty_items}")
+                  f"相对链接={relative_links}  缺镜像页={missing_mirrors}  "
+                  f"原站图片={hotlinked}  空正文={empty_items}")
             hard_errors += relative_links + missing_mirrors + empty_items
             continue
         print(f"items={total}  结构达标={total - len(thin)}/{total}  最少块数={min_blocks}  "
               f"最少文字={min_chars}  相对链接={relative_links}  缺镜像页={missing_mirrors}  "
-              f"空正文={empty_items}")
+              f"原站图片={hotlinked}  空正文={empty_items}")
         for title, info in thin[:15]:
             print(f"  [短帖] {title!r} blocks={info['blocks']} chars={info['chars']} "
                   f"imgs={info['images']}（App 会改抓原帖页，若用 feed-app.xml 则无影响）")
 
         warnings += len(thin)
+        if hotlinked:
+            print(f"  [防盗链] {hotlinked} 条内容里的图片仍指向 beiyoujiang.com，阅读器里会 403（用 --img-dir 镜像）")
+            warnings += hotlinked
         hard_errors += relative_links + missing_mirrors + empty_items
 
     print(f"\n结果：硬错误 {hard_errors} 处，短帖提醒 {warnings} 条")

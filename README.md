@@ -41,7 +41,9 @@ iOS「閲讀」（Yuedu-reader）、安卓「阅读 / Legado」用 `feed-app.xml
 2. **静态镜像页兜底**：为每篇帖子生成 `docs/p/<帖子ID>.html`（纯静态、手机排版、
    含正文 + 配图 + 最新评论 + 原帖链接），`feed-app.xml` 的 item 链接直接指向镜像页。
    即使 App 坚持抓「全文」，抓到的也是真实内容，不会再是加载占位。
-3. **自检脚本**：`check_feed.py` 用与 App 相同的阈值检查每条 item，CI 里跑一遍，
+3. **图片镜像**：`beiyoujiang.com` 开了防盗链（Referer 不是本站就 403），而阅读器加载正文时
+   的 Referer 正是 Pages 地址，图片必然裂开。生成时把图片下载到 `docs/img/` 再引用同源地址。
+4. **自检脚本**：`check_feed.py` 用与 App 相同的阈值检查每条 item，CI 里跑一遍，
    避免以后改坏了又变成「只有标题」。
 
 ## 本地运行
@@ -55,6 +57,8 @@ python generate_feed.py \
   --app-out docs/feed-app.xml \
   --mirror-dir docs/p \
   --mirror-base "https://q1328044008.github.io/beiyoujiang-rss/p/" \
+  --img-dir docs/img \
+  --img-base "https://q1328044008.github.io/beiyoujiang-rss/img/" \
   --per-plate 15 --pages 2 --page-size 20 \
   --feed-url "https://q1328044008.github.io/beiyoujiang-rss/feed.xml" \
   --app-feed-url "https://q1328044008.github.io/beiyoujiang-rss/feed-app.xml"
@@ -69,6 +73,7 @@ python check_feed.py docs/feed.xml docs/feed-app.xml docs/feed-text.xml
 - `--max-comments 12`：每帖最多显示多少条评论（默认 12，接口里按时间倒序）
 - `--no-comments` / `--no-detail`：少发请求，适合调试
 - `--app-out` / `--mirror-dir` / `--mirror-base`：生成 App 专用 feed 与镜像页
+- `--img-dir` / `--img-base`：把配图镜像到 Pages，绕开原站防盗链（不清空、不重复下载）
 
 ## 目录
 
@@ -79,6 +84,7 @@ docs/feed.xml             主订阅源（原帖链接）
 docs/feed-text.xml        纯文本版
 docs/feed-app.xml         App 专用版（镜像页链接）
 docs/p/<id>.html          每篇帖子的静态镜像页（每次运行重建，旧页面会清理）
+docs/img/<hash>.<ext>     镜像的配图（按图片地址哈希命名，先存在就跳过）
 docs/index.html           订阅说明页
 .github/workflows/rss.yml 每 30 分钟自动更新
 ```
@@ -88,4 +94,5 @@ docs/index.html           订阅说明页
 - 只抓公开接口，游客身份（`addTourist`）失效时会退化为「只有列表摘要」，日志里会有 `[warn]`。
 - 每帖默认只带最新 12 条评论，避免个别热帖（几百条评论）把 feed 撑到几 MB。
 - 镜像页只保留当前 feed 里的帖子，旧的会被清理；想长期保存请用 App 的收藏功能。
-- 图片仍直连 `beiyoujiang.com`，未做缓存。
+- 配图会镜像到 `docs/img/`（首次约 7〜8 MB），只有新帖子的图才会新增，旧图随帖子滚出 feed 时清理；
+  git 历史里仍会留档，长期仓库体积会缓慢增长。
