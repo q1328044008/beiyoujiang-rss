@@ -10,46 +10,77 @@
   body { margin: 0; padding: 48px 20px; font: 16px/1.7 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; }
   main { max-width: 680px; margin: 0 auto; }
   h1 { font-size: 24px; margin: 0 0 8px; }
+  h2 { font-size: 17px; margin: 32px 0 10px; }
   .sub { opacity: .65; margin: 0 0 32px; }
   .card { border: 1px solid rgba(125,125,125,.28); border-radius: 12px; padding: 18px 20px; margin-bottom: 16px; }
+  .card.hot { border-color: rgba(10,102,194,.55); }
   label { display: block; font-size: 13px; opacity: .6; margin-bottom: 4px; }
   a { word-break: break-all; }
   pre { margin: 0; overflow-x: auto; }
   ul { margin: 8px 0 0; padding-left: 20px; }
   li { margin-bottom: 4px; }
   .warn { font-size: 13px; opacity: .6; margin-top: 28px; }
+  .tip { font-size: 13px; opacity: .7; margin: 10px 0 0; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .row pre { flex: 1 1 260px; }
+  button.copy { font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 8px; cursor: pointer;
+    border: 1px solid rgba(125,125,125,.4); background: transparent; color: inherit; }
+  button.copy:active { transform: scale(.97); }
+  code { font-size: .92em; }
 </style>
 </head>
 <body>
 <main>
   <h1>杯友酱论坛 RSS 订阅源</h1>
-  <p class="sub">每 30 分钟自动更新一次，抓取 beiyoujiang.com 三个板块的最新帖子，<b>含正文全文与楼中楼评论</b>。</p>
+  <p class="sub">每 30 分钟自动更新一次，抓取 beiyoujiang.com 三个板块的最新帖子，<b>含正文全文、配图与楼中楼评论</b>。</p>
+
+  <div class="card hot">
+    <label>iOS「閲讀」/ 安卓「阅读 · Legado」推荐用这条</label>
+    <div class="row">
+      <pre><a href="./feed-app.xml">https://q1328044008.github.io/beiyoujiang-rss/feed-app.xml</a></pre>
+      <button class="copy" data-copy="https://q1328044008.github.io/beiyoujiang-rss/feed-app.xml">复制</button>
+    </div>
+    <p class="tip">App 专用版：每条都指向本站生成的<b>静态正文页</b>，正文和评论一定能打开，不会只剩标题。</p>
+  </div>
 
   <div class="card">
     <label>订阅地址（浏览器 / 网页阅读器）</label>
-    <pre><a href="./feed.xml">https://q1328044008.github.io/beiyoujiang-rss/feed.xml</a></pre>
+    <div class="row">
+      <pre><a href="./feed.xml">https://q1328044008.github.io/beiyoujiang-rss/feed.xml</a></pre>
+      <button class="copy" data-copy="https://q1328044008.github.io/beiyoujiang-rss/feed.xml">复制</button>
+    </div>
+    <p class="tip">Inoreader / Feedly / NetNewsWire / Reeder / FreshRSS 用这条，条目链接直接指向原帖。</p>
   </div>
 
   <div class="card">
-    <label>阅读App（Legado / 阅读）</label>
-    <p style="margin:0 0 10px;font-size:14px">新建一个 RSS 订阅，地址填下面这条就行，不用 js 源、不用登录。</p>
-    <pre><a href="./feed-text.xml">https://q1328044008.github.io/beiyoujiang-rss/feed-text.xml</a></pre>
-    <p style="margin:10px 0 0;font-size:13px;opacity:.7">这条是纯文本版，正文和评论都是纯文字，App 里不解析 HTML 也能看到全部内容。</p>
+    <label>纯文字版（不渲染 HTML 的极简阅读器）</label>
+    <div class="row">
+      <pre><a href="./feed-text.xml">https://q1328044008.github.io/beiyoujiang-rss/feed-text.xml</a></pre>
+      <button class="copy" data-copy="https://q1328044008.github.io/beiyoujiang-rss/feed-text.xml">复制</button>
+    </div>
+    <p class="tip">正文和评论都是纯文字。注意：iOS「閲讀」用它反而可能触发全文抓取，建议用上面的 App 专用版。</p>
   </div>
 
+  <h2>之前为什么「只有标题」？</h2>
   <div class="card">
-    <label>常见阅读器添加方式</label>
+    <p style="margin:0 0 10px">beiyoujiang.com 的帖子页是前端渲染的单页应用，服务器返回的 HTML 里只有一段「加载中」占位：</p>
+    <pre style="font-size:13px;opacity:.75">&lt;img src="/images/load.gif"&gt; 主人别急~ 杯酱正在努力装填玩具弹药...</pre>
+    <p style="margin:10px 0 0">而「閲讀」的阅读器默认会判断 feed 自带正文够不够「结构化」，不够就自己去抓条目链接做正文提取——抓到的既然是占位文字，正文就被覆盖了，于是只剩标题。</p>
+  </div>
+
+  <h2>现在做了什么</h2>
+  <div class="card">
     <ul>
-      <li>Inoreader / Feedly / NetNewsWire / Reeder：直接粘贴上面的订阅地址</li>
-      <li>Android：Read You、Feeder、FeedMe</li>
-      <li>iOS / macOS：Reeder、NetNewsWire、FreshRSS 客户端</li>
+      <li>正文重排成真正的段落：一段一 <code>&lt;p&gt;</code>、一图一 <code>&lt;p&gt;</code>，评论楼层也各自成块，App 会直接使用 feed 内容。</li>
+      <li>每篇帖子额外生成静态页（<code>/p/帖子ID.html</code>），<code>feed-app.xml</code> 指向它们，就算 App 坚持抓全文也能抓到真内容。</li>
+      <li>生成时自动自检：结构块数量、文字长度、相对链接、镜像页是否齐全，不达标就报警。</li>
     </ul>
   </div>
 
   <div class="card">
     <label>想只看某个板块？本地运行并指定板块</label>
     <pre>python generate_feed.py --plates 2 --out feed.xml</pre>
-    <p style="margin:8px 0 0;font-size:13px;opacity:.7">1 = 大型倒模，2 = 杯酱论坛，3 = 杂鱼茶话，可写 <code>1,3</code> 组合。</p>
+    <p class="tip">1 = 大型倒模，2 = 杯酱论坛，3 = 杂鱼茶话，可写 <code>1,3</code> 组合。</p>
   </div>
 
   <p class="warn">本站内容为 18+ 成人玩具交流社区的公开帖子摘要，仅面向成年读者。</p>
@@ -59,5 +90,25 @@
     抓取脚本、订阅源与本站页面：豆包（Doubao）协助搭建与维护 ｜ 数据来源：beiyoujiang.com 公开接口
   </p>
 </main>
+<script>
+  document.querySelectorAll("button.copy").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var text = btn.getAttribute("data-copy");
+      var done = function () {
+        var old = btn.textContent;
+        btn.textContent = "已复制";
+        setTimeout(function () { btn.textContent = old; }, 1200);
+      };
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(done, function () {});
+      } else {
+        var ta = document.createElement("textarea");
+        ta.value = text; document.body.appendChild(ta); ta.select();
+        try { document.execCommand("copy"); done(); } catch (e) {}
+        document.body.removeChild(ta);
+      }
+    });
+  });
+</script>
 </body>
 </html>

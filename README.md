@@ -1,82 +1,91 @@
-# beiyoujiang-rss
+# 杯友酱论坛 RSS 订阅源
 
-给 [杯友酱论坛](https://beiyoujiang.com/) 做的 RSS 订阅源。
+把 [beiyoujiang.com](https://beiyoujiang.com/) 的公开帖子做成 RSS，**含正文全文、配图和楼中楼评论**，
+每 30 分钟由 GitHub Actions 自动更新。
 
-抓取脚本、订阅源与说明页由 **豆包（Doubao）** 协助搭建与维护；数据来自站点公开接口。
+> 站点为 18+ 成人玩具交流社区，本仓库只聚合其公开接口数据，内容仅面向成年读者。
 
-- **富文本版**（浏览器 / 网页阅读器）：https://q1328044008.github.io/beiyoujiang-rss/feed.xml
-- **纯文本版**（「阅读」/ Legado 这类 App 用这条）：https://q1328044008.github.io/beiyoujiang-rss/feed-text.xml
+## 订阅地址
 
-两版内容一样：正文全文 + 配图 + 楼中楼评论，区别只在正文是 HTML 还是纯文本。
+| 用途 | 地址 | 说明 |
+| --- | --- | --- |
+| 浏览器 / 网页阅读器 | `https://q1328044008.github.io/beiyoujiang-rss/feed.xml` | item 链接指向原帖 |
+| **iOS「閲讀」/ Legado 等 App** | `https://q1328044008.github.io/beiyoujiang-rss/feed-app.xml` | item 链接指向**静态镜像页**，正文评论一定显示 |
+| 极简 / 不渲染 HTML 的阅读器 | `https://q1328044008.github.io/beiyoujiang-rss/feed-text.xml` | 纯文字 |
 
-## 在「阅读」(Legado) 里用
+Inoreader / Feedly / NetNewsWire / Reeder / FreshRSS 用 `feed.xml`；
+iOS「閲讀」（Yuedu-reader）、安卓「阅读 / Legado」用 `feed-app.xml` 最稳。
 
-新建一个 RSS 订阅，地址粘贴 `feed-text.xml` 那条即可。不需要 js 源，也不需要登录账号。
-纯文本版保证正文和评论是纯文字，App 里不渲染 HTML 也能看全。
+## 为什么之前「只有标题」？
 
-## 这是怎么做的
+`beiyoujiang.com` 的帖子页是 Next.js 单页应用，服务端只返回一个空壳：
 
-站点是 Next.js 前端 + Express 后端，没有官方 RSS，但数据走几个公开接口：
-
+```html
+<img src="/images/load.gif"> 主人别急~ 杯酱正在努力装填玩具弹药...
+<title>可可狼姬和赤鸢 - 杯友酱</title>
 ```
-POST /api/auth/addTourist        {}                                          # 注册游客，拿 userId + token
 
-POST /api/post/getAllPost        {"plate":2,"most":1,"userId":null,"page":1,"pageSize":20}
-POST /api/post/getPost           {"postId":13609,"userId":<游客id>}          # 正文全文
-POST /api/comment/getPostComment {"postId":13609,"userId":<游客id>,"reply":null,"order":1,"orderType":"time"}
-```
+而 iOS「閲讀」的阅读器默认是 **Reader（全文）模式**：它会先判断 feed 自带的正文是否「够结构化」，
+不够就自己去抓 item 的 `link` 页面做正文提取（`RSSArticleContentLoader` → `RSSArticleExtractor`）。
+抓到的既然是「加载中」占位，正文就被这段占位覆盖 —— 于是只剩标题。
+（其判据 `RSSArticleHTMLSanitizer.hasSubstantialStructuredContent`：结构块 ≥ 4 且文字 ≥ 260，
+或含图片且结构块 ≥ 2、文字 ≥ 180；块只算 `p/figure/blockquote/ul/ol/h2/h3/footer`。）
 
-- `plate`：板块。`1` 大型倒模 / `2` 杯酱论坛 / `3` 杂鱼茶话
-- `most`：排序。`1` 按发布时间（RSS 用这个）/ `2` 按最后回复
-- 列表接口返回 `id`、`title`、`content`（摘要）、`commentCount`、`createdAt` 等
-- 详情和评论接口要求带 `userId`（游客 id 即可）＋ `Authorization: Bearer <token>`，所以脚本开头会先注册一个游客身份
+旧版 feed 把整篇帖子塞进一个 `<p>`、评论塞进一串 `<div>`，既不是合法 HTML 嵌套
+（`<p><div>…</div></p>`），结构块数量也常常不达标，所以大多数条目都会触发「去抓原帖」→ 空。
 
-`generate_feed.py` 的流程：注册游客 → 抓列表 → 去重排序 → 逐条补正文和评论 → 输出 RSS 2.0。
-帖子里同时写入 `description` 和 `content:encoded`（全文 + 配图 + 楼中楼评论），兼容只认其中一个字段的阅读器。
-帖子链接按站内规则拼成 `https://beiyoujiang.com/messageDetail/{id}`，图片走 `/PostImg/{filename}`。
+## 现在怎么解决
 
-## 文件
+1. **正文重排为真正的段落块**：一段一 `<p>`、一图一 `<p>`，评论楼层也各自成块，
+   并补上「原帖」页脚。这样大多数条目都能让 App 直接使用 feed 内容，不再抓原帖。
+2. **静态镜像页兜底**：为每篇帖子生成 `docs/p/<帖子ID>.html`（纯静态、手机排版、
+   含正文 + 配图 + 最新评论 + 原帖链接），`feed-app.xml` 的 item 链接直接指向镜像页。
+   即使 App 坚持抓「全文」，抓到的也是真实内容，不会再是加载占位。
+3. **自检脚本**：`check_feed.py` 用与 App 相同的阈值检查每条 item，CI 里跑一遍，
+   避免以后改坏了又变成「只有标题」。
 
-| 文件 | 作用 |
-| --- | --- |
-| `generate_feed.py` | 抓取并生成 RSS，纯标准库，无需 pip install |
-| `.github/workflows/rss.yml` | 每 30 分钟跑一次，同时更新 `docs/feed.xml` 与 `docs/feed-text.xml` 并提交 |
-| `docs/feed.xml` | 富文本订阅文件，Pages 发布的就是它 |
-| `docs/feed-text.xml` | 纯文本订阅文件，给不渲染 HTML 的阅读器 |
-| `docs/index.html` | 一页说明，打开站点首页能看到订阅地址 |
+## 本地运行
 
-## 发布方式
-
-GitHub Pages 走「Deploy from a branch」：分支 `main`、目录 `/docs`。
-每次 `docs/feed.xml` 有更新就被工作流提交，Pages 自动重新发布，不依赖 Actions 部署权限。
-
-## 本地跑
+只依赖 Python 标准库（`check_feed.py` 也不需要第三方包）：
 
 ```bash
-python generate_feed.py                                    # 全部板块，生成 feed.xml
-python generate_feed.py --plates 2 --pages 3 --limit 60    # 只看杯酱论坛，抓 3 页 60 条
-python generate_feed.py --out docs/feed.xml                # 输出到 docs 目录
+python generate_feed.py \
+  --out docs/feed.xml \
+  --text-out docs/feed-text.xml \
+  --app-out docs/feed-app.xml \
+  --mirror-dir docs/p \
+  --mirror-base "https://q1328044008.github.io/beiyoujiang-rss/p/" \
+  --per-plate 15 --pages 2 --page-size 20 \
+  --feed-url "https://q1328044008.github.io/beiyoujiang-rss/feed.xml" \
+  --app-feed-url "https://q1328044008.github.io/beiyoujiang-rss/feed-app.xml"
+
+python check_feed.py docs/feed.xml docs/feed-app.xml docs/feed-text.xml
 ```
 
-参数说明：
+常用参数：
 
-- `--plates`：板块，逗号分隔，默认 `1,2,3`
-- `--pages`：每个板块抓几页，默认 2
-- `--page-size`：每页条数，默认 20
-- `--limit`：最终保留条数，默认 40
-- `--per-plate`：每个板块各留多少条。填了会忽略 `--limit`，冷门板块不会被热门板块挤掉。线上跑的是 `--plates 1,2,3 --per-plate 15`，共 45 条，三块各 15 条
-- `--out`：输出路径，默认 `feed.xml`
-- `--text-out`：顺便再输出一份纯文本 feed，比如 `--text-out docs/feed-text.xml`
-- `--format`：`html`（默认）或 `text`，单独生成纯文本版时用
-- `--feed-url`：填了会写进 `<atom:link rel="self">`，方便阅读器识别
-- `--no-comments`：不抓评论，请求量减半（40 条约 40 次请求 → 约 70 次）
-- `--no-detail`：不抓正文全文，只用列表摘要，速度最快
+- `--plates 1,2,3`：1 = 大型倒模，2 = 杯酱论坛，3 = 杂鱼茶话
+- `--per-plate 15`：每个板块各留 15 条（冷门板块不会被热门板块挤掉）
+- `--max-comments 12`：每帖最多显示多少条评论（默认 12，接口里按时间倒序）
+- `--no-comments` / `--no-detail`：少发请求，适合调试
+- `--app-out` / `--mirror-dir` / `--mirror-base`：生成 App 专用 feed 与镜像页
 
-## 可能遇到的坑
+## 目录
 
-- 站点对短时间高频请求会返回 **429**。脚本按每 0.9 秒一次的节奏发请求，命中 429 会自动退避 25 秒重试；没有评论的帖子直接跳过评论接口，请求数能省一半。
-- GitHub 的定时任务不保证准点，免费额度下延迟几分钟到十几分钟都正常。
-- 抓取只读公开接口，不登录、不发帖、不点赞；游客账号每次运行新建一个，只用于读详情。
-- 如果哪天接口改了字段或加了风控，`generate_feed.py` 是唯一需要改的地方，改 `Client.post()` 的 payload 即可。
-- 抓到的图片是站内相对路径转成的绝对地址，阅读器支持外链图片才会显示。
-- 内容为 18+ 成人玩具社区帖子摘要，只适合成年读者自用。
+```
+generate_feed.py          抓取 + 生成 RSS / 镜像页
+check_feed.py             结构自检（与「閲讀」的判据一致）
+docs/feed.xml             主订阅源（原帖链接）
+docs/feed-text.xml        纯文本版
+docs/feed-app.xml         App 专用版（镜像页链接）
+docs/p/<id>.html          每篇帖子的静态镜像页（每次运行重建，旧页面会清理）
+docs/index.html           订阅说明页
+.github/workflows/rss.yml 每 30 分钟自动更新
+```
+
+## 已知边界
+
+- 只抓公开接口，游客身份（`addTourist`）失效时会退化为「只有列表摘要」，日志里会有 `[warn]`。
+- 每帖默认只带最新 12 条评论，避免个别热帖（几百条评论）把 feed 撑到几 MB。
+- 镜像页只保留当前 feed 里的帖子，旧的会被清理；想长期保存请用 App 的收藏功能。
+- 图片仍直连 `beiyoujiang.com`，未做缓存。
