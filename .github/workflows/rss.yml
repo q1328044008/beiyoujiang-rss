@@ -9,6 +9,7 @@ on:
     branches: [main]
     paths:
       - "generate_feed.py"
+      - "check_feed.py"
       - ".github/workflows/**"
 
 permissions:
@@ -30,31 +31,39 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: 生成 feed（富文本 + 纯文本两版）
+      - name: 生成 feed（HTML / 纯文本 / App 镜像版）与静态镜像页
         run: |
           python generate_feed.py \
             --out docs/feed.xml \
             --text-out docs/feed-text.xml \
+            --app-out docs/feed-app.xml \
+            --mirror-dir docs/p \
+            --mirror-base "https://q1328044008.github.io/beiyoujiang-rss/p/" \
             --plates 1,2,3 \
             --per-plate 15 \
             --pages 2 \
             --page-size 20 \
-            --feed-url "https://q1328044008.github.io/beiyoujiang-rss/feed.xml"
+            --feed-url "https://q1328044008.github.io/beiyoujiang-rss/feed.xml" \
+            --app-feed-url "https://q1328044008.github.io/beiyoujiang-rss/feed-app.xml"
 
       - name: 校验 XML 合法性
         run: |
           python -c "import xml.etree.ElementTree as ET; ET.parse('docs/feed.xml'); print('feed.xml OK')"
           python -c "import xml.etree.ElementTree as ET; ET.parse('docs/feed-text.xml'); print('feed-text.xml OK')"
+          python -c "import xml.etree.ElementTree as ET; ET.parse('docs/feed-app.xml'); print('feed-app.xml OK')"
+
+      - name: 校验正文结构（避免「只有标题」）
+        run: python check_feed.py docs/feed.xml docs/feed-app.xml docs/feed-text.xml
 
       - name: 内容有变化才提交
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if git diff --quiet -- docs/feed.xml docs/feed-text.xml; then
+          if git diff --quiet -- docs/; then
             echo "内容无变化，跳过提交"
             exit 0
           fi
-          git add docs/feed.xml docs/feed-text.xml
+          git add docs/
           git commit -m "chore: 更新 feed $(date -u '+%Y-%m-%d %H:%M UTC')"
           # 期间可能有人工提交，先 rebase 再推，最多试三次
           for i in 1 2 3; do
